@@ -505,14 +505,143 @@
             {"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"getUserLocks","outputs":[{"components":[{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"unlockTime","type":"uint256"},{"internalType":"uint256","name":"apy","type":"uint256"},{"internalType":"bool","name":"claimed","type":"bool"}],"internalType":"struct LBRStaking.LockInfo[]","name":"","type":"tuple[]"}],"stateMutability":"view","type":"function"}
         ];
         
+        const lbrTreasuryABI = [
+          {
+            "inputs": [
+              {
+                "internalType": "address",
+                "name": "_lbrToken",
+                "type": "address"
+              },
+              {
+                "internalType": "address",
+                "name": "initialOwner",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "constructor"
+          },
+          {
+            "inputs": [],
+            "name": "burnedToday",
+            "outputs": [
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "lastBurnDate",
+            "outputs": [
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "LBR",
+            "outputs": [
+              {
+                "internalType": "contract ILBRToken",
+                "name": "",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "stakingContract",
+            "outputs": [
+              {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+              }
+            ],
+            "name": "burn",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+              }
+            ],
+            "name": "deposit",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "address",
+                "name": "to",
+                "type": "address"
+              },
+              {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+              }
+            ],
+            "name": "distribute",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "address",
+                "name": "_stakingContract",
+                "type": "address"
+              }
+            ],
+            "name": "setStakingContract",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          }
+        ];
+
+        
         // Global variables
-        let web3;
         let provider;
         let signer;
         let userAddress;
         let lbrETHContract;
         let lbrTokenContract;
         let lbrStakingContract;
+        let lbrTreasuryContract;
         
         // DOM Elements
         const connectWalletBtn = document.getElementById('connect-wallet');
@@ -559,6 +688,7 @@
                     lbrETHContract = new web3.eth.Contract(lbrETHABI, lbrETHAddress);
                     lbrTokenContract = new web3.eth.Contract(lbrTokenABI, lbrTokenAddress);
                     lbrStakingContract = new web3.eth.Contract(lbrStakingABI, lbrStakingAddress);
+                    lbrTreasuryContract = new web3.eth.Contract(lbrTreasuryABI, lbrTreasuryAddress);
                     
                     // Update UI
                     updateWalletUI();
@@ -684,11 +814,12 @@
 				document.getElementById('your-rewards').textContent = formatFixed(yourRewards);
 
 				// Treasury Balance
-				const treasuryBalance = await lbrStakingContract.methods.getTreasuryLBRBalance().call();
-				document.getElementById('treasury-balance').textContent = formatUnits(treasuryBalance, 18);
+                const treasuryBalance = await lbrStakingContract.methods.getTreasuryLBRBalance().call();
+                const formattedTreasury = Number(formatUnits(treasuryBalance, 18)).toFixed(3);
+                document.getElementById('treasury-balance').textContent = formattedTreasury;
 
 				// Staking Reward Rate
-				document.getElementById('staking-reward-rate').textContent = "0.05 LBR per 1 lbrETH per day";
+				document.getElementById('staking-reward-rate').textContent = "150 LBR/1 lbrETH/day";
 
 				// Burn Reward Rate
 				const burnRewardRate = await lbrStakingContract.methods.burnRewardRate().call();
@@ -701,7 +832,12 @@
 
 				// Total Supply
 				const totalSupply = await lbrTokenContract.methods.totalSupply().call();
-				document.getElementById('total-supply').textContent = formatUnits(totalSupply, 18);
+				const formattedSupply = Number(formatUnits(totalSupply, 18)).toFixed(3);
+                document.getElementById('total-supply').textContent = formattedSupply;
+                
+                const burnedToday = await lbrTreasuryContract.methods.burnedToday().call();
+                const formattedBurnedToday = Number(formatUnits(burnedToday, 18)).toFixed(3);
+                document.getElementById('burned-today').textContent = formattedBurnedToday;
 
 				// Update active locks
 				updateActiveLocks();
@@ -710,57 +846,64 @@
 			}
 		}
 
-		async function updateActiveLocks() {
-			if (!userAddress) return;
+        async function updateActiveLocks() {
+        	if (!userAddress) return;
+        
+        	try {
+        		const locks = await lbrStakingContract.methods.getUserLocks(userAddress).call();
+        		const locksList = document.getElementById('locks-list');
+        
+        		if (locks.length === 0) {
+        			locksList.innerHTML = '<p class="text-muted">No active locks found</p>';
+        			return;
+        		}
+        
+        		locksList.innerHTML = '';
+        
+        		locks.forEach((lock, index) => {
+        			if (!lock.claimed) {
+        				const lockDiv = document.createElement('div');
+        				lockDiv.className = 'glass-card p-3 mb-2';
+        
+        				// Convert unlock time to readable date
+        				const unlockDate = new Date(lock.unlockTime * 1000).toLocaleDateString();
+        
+        				// Convert amount from wei to human-readable (assumes 18 decimals)
+        				const lockAmount = ethers.utils.formatUnits(lock.amount, 18);
+        
+        				// Convert APY from 1000 = 10.00%
+        				const displayAPY = (parseFloat(lock.apy) / 100).toFixed(2);
+        
+        				lockDiv.innerHTML = `
+        					<div class="d-flex justify-content-between align-items-center mb-2">
+        						<span>Lock #${index + 1}</span>
+        						<span class="badge bg-primary">APY: ${displayAPY}%</span>
+        					</div>
+        					<div class="d-flex justify-content-between align-items-center mb-2">
+        						<small>Amount: ${lockAmount} LBR</small>
+        						<small>Unlocks: ${unlockDate}</small>
+        					</div>
+        					<button class="btn btn-sm btn-outline-primary w-100 unlock-btn" data-lock-id="${index}">
+        						Unlock
+        					</button>
+        				`;
+        
+        				locksList.appendChild(lockDiv);
+        			}
+        		});
+        
+        		// Add event listeners to unlock buttons
+        		document.querySelectorAll('.unlock-btn').forEach(button => {
+        			button.addEventListener('click', function () {
+        				const lockId = this.getAttribute('data-lock-id');
+        				unlockReward(lockId);
+        			});
+        		});
+        	} catch (error) {
+        		console.error("Error updating active locks:", error);
+        	}
+        }
 
-			try {
-				const locks = await lbrStakingContract.methods.getUserLocks(userAddress).call();
-				const locksList = document.getElementById('locks-list');
-
-				if (locks.length === 0) {
-					locksList.innerHTML = '<p class="text-muted">No active locks found</p>';
-					return;
-				}
-
-				locksList.innerHTML = '';
-
-				locks.forEach((lock, index) => {
-					if (!lock.claimed) {
-						const lockDiv = document.createElement('div');
-						lockDiv.className = 'glass-card p-3 mb-2';
-
-						const unlockDate = new Date(lock.unlockTime * 1000).toLocaleDateString();
-						const lockAmount = formatFixed(lock.amount);
-
-						lockDiv.innerHTML = `
-							<div class="d-flex justify-content-between align-items-center mb-2">
-								<span>Lock #${index + 1}</span>
-								<span class="badge bg-primary">APY: ${lock.apy}%</span>
-							</div>
-							<div class="d-flex justify-content-between align-items-center mb-2">
-								<small>Amount: ${lockAmount} LBR</small>
-								<small>Unlocks: ${unlockDate}</small>
-							</div>
-							<button class="btn btn-sm btn-outline-primary w-100 unlock-btn" data-lock-id="${index}">
-								Unlock
-							</button>
-						`;
-
-						locksList.appendChild(lockDiv);
-					}
-				});
-
-				// Add event listeners
-				document.querySelectorAll('.unlock-btn').forEach(button => {
-					button.addEventListener('click', function () {
-						const lockId = this.getAttribute('data-lock-id');
-						unlockReward(lockId);
-					});
-				});
-			} catch (error) {
-				console.error("Error updating active locks:", error);
-			}
-		}
 
         
         // Set max deposit amount
@@ -905,23 +1048,34 @@
                 alert("Please connect your wallet first");
                 return;
             }
-            
+        
+            const amount = document.getElementById('stake-amount').value; // Ambil jumlah token dari input user
+            if (!amount || parseFloat(amount) <= 0) {
+                alert("Please enter a valid amount");
+                return;
+            }
+        
             try {
                 showTransactionModal("Approving lbrETH for staking...");
-                
+        
+                // Convert jumlah yang diinput ke Wei (18 decimal)
+                const amountWei = ethers.utils.parseUnits(amount, 18);
+        
+                // Approve sesuai dengan jumlah yang diinput
                 const tx = await lbrETHContract.methods.approve(
                     lbrStakingAddress,
-                    ethers.constants.MaxUint256
+                    amountWei
                 ).send({
                     from: userAddress
                 });
-                
+        
                 showTransactionSuccess(tx.transactionHash);
             } catch (error) {
                 showTransactionError(error.message);
                 console.error("Error approving lbrETH:", error);
             }
         }
+
         
         // Stake lbrETH
         async function stakeLbrETH() {
@@ -1013,7 +1167,6 @@
             }
         }
         
-        // Approve LBR for burning
         async function approveBurn() {
             if (!userAddress) {
                 alert("Please connect your wallet first");
@@ -1036,6 +1189,7 @@
                 console.error("Error approving LBR:", error);
             }
         }
+
         
         // Burn LBR for reward
         async function burnForReward() {
@@ -1075,23 +1229,31 @@
             }
         }
         
-        // Approve LBR for locking
         async function approveLock() {
             if (!userAddress) {
                 alert("Please connect your wallet first");
                 return;
             }
-            
+        
+            const amount = document.getElementById('lock-amount').value;
+            if (!amount || parseFloat(amount) <= 0) {
+                alert("Please enter a valid amount");
+                return;
+            }
+        
+            const amountWei = ethers.utils.parseUnits(amount, 18);  // Mengonversi jumlah LBR ke wei (18 desimal)
+        
             try {
                 showTransactionModal("Approving LBR for locking...");
                 
+                // Approve LBR untuk staking, gunakan jumlah token yang sesuai
                 const tx = await lbrTokenContract.methods.approve(
                     lbrStakingAddress,
-                    ethers.constants.MaxUint256
+                    amountWei.toString()  // Hanya approve sejumlah amount yang sesuai
                 ).send({
                     from: userAddress
                 });
-                
+        
                 showTransactionSuccess(tx.transactionHash);
             } catch (error) {
                 showTransactionError(error.message);
@@ -1099,7 +1261,7 @@
             }
         }
         
-        // Lock LBR for reward
+                
         async function lockReward() {
             if (!userAddress) {
                 alert("Please connect your wallet first");
@@ -1112,11 +1274,15 @@
                 return;
             }
             
-            const duration = document.getElementById('lock-duration').value;
-            if (!duration) {
+            // Ambil durasi yang dipilih dari dropdown
+            const durationInDays = document.getElementById('lock-duration').value;
+            if (!durationInDays) {
                 alert("Please select a duration");
                 return;
             }
+            
+            // Konversi durasi dalam hari ke detik
+            const durationInSeconds = durationInDays * 24 * 60 * 60;  // Mengonversi hari ke detik
             
             const amountWei = parseUnits(amount, 18);
             
@@ -1124,16 +1290,18 @@
                 // Check allowance first
                 const allowance = await lbrTokenContract.methods.allowance(userAddress, lbrStakingAddress).call();
                 
+                // Check if allowance is sufficient
                 if (BigInt(allowance) < BigInt(amountWei.toString())) {
                     alert("Please approve LBR for locking first");
                     return;
                 }
-                
+        
                 showTransactionModal("Locking LBR for reward...");
                 
+                // Kirim transaksi dengan durasi yang sudah dikonversi ke detik
                 const tx = await lbrStakingContract.methods.lockReward(
                     amountWei.toString(),
-                    duration
+                    durationInSeconds // Durasi dalam detik
                 ).send({
                     from: userAddress
                 });
@@ -1145,6 +1313,8 @@
                 console.error("Error locking LBR:", error);
             }
         }
+
+
         
         // Unlock reward
         async function unlockReward(lockId) {
