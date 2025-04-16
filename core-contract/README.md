@@ -50,7 +50,7 @@ npx hardhat compile
 ### 4. Run Full Flow Test
 Run the test script directly (no need to start a separate Hardhat node):
 ```bash
-npx hardhat test scripts/testfullflow.js
+npx hardhat test
 ```
 
 ---
