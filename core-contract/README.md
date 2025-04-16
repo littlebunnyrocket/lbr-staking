@@ -33,7 +33,7 @@ require("@nomicfoundation/hardhat-toolbox");
 
 ### 1. Clone the Repository
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/littlebunnyrocket/lbr-staking.git
 cd lbr-staking/core-contracts
 ```
 
