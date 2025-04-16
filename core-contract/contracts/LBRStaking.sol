@@ -382,7 +382,7 @@ contract LBRStaking is Ownable, ReentrancyGuard {
     ILBRToken public LBR;
     LBRTreasury public treasury;
 
-    uint256 public stakingRewardRate = 17361111111111100;
+    uint256 public stakingRewardRate = 1736111111111111;
     uint256 public burnRewardRate = 11000;
     mapping(uint256 => uint256) public lockDurations;
 
