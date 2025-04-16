@@ -22,11 +22,6 @@ Also install Hardhat Toolbox (required):
 npm install --save-dev hardhat-toolbox
 ```
 
-In your `hardhat.config.js`, make sure to include:
-```js
-require("@nomicfoundation/hardhat-toolbox");
-```
-
 ---
 
 ## ✨ Step-by-Step Setup
